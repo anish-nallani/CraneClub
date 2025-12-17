@@ -1,0 +1,284 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8" />
+<title>Crane Club</title>
+
+<style>
+  :root{
+    --ui-zoom: 1.25;
+    --ink: #415C7D;
+
+    /* ✅ move the bubble with pixels */
+    --bubble-left: 50px;
+    --bubble-top: 620px; /* change this to position it */
+  }
+
+  body{
+    margin:0;
+    overflow:hidden;
+    font-family:"OCR-A BT",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+    color:var(--ink);
+  }
+
+/* ========= BACKGROUND STAGE (PURE FADE) ========= */
+.bg-stage{
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1920px;
+  height: 1080px;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.bg{
+  position:absolute;
+  inset:0;
+  background-repeat: repeat;
+  background-position: left top;
+  background-size: auto;
+  will-change: opacity;
+  opacity: 0;
+}
+
+.bg.current{ opacity: 1; }
+.bg.next{ opacity: 0; }
+
+body.bg-transition .bg.current{
+  opacity: 0;
+  transition: opacity 260ms ease-out;
+}
+body.bg-transition .bg.next{
+  opacity: 1;
+  transition: opacity 260ms ease-out;
+}
+
+  /* ========= VIEWPORT-LOCKED UI (125%) ========= */
+  .text-layer{
+    position:fixed;
+    top:0; left:0;
+    width:calc(100vw / var(--ui-zoom));
+    height:calc(100vh / var(--ui-zoom));
+    transform:scale(var(--ui-zoom));
+    transform-origin:top left;
+    z-index:2;
+  }
+
+  .text-layer p{
+    position:absolute;
+    margin:0;
+    font-size:14px;
+    letter-spacing:0.08em;
+    white-space:nowrap;
+    color:var(--ink);
+  }
+
+  /* ========= ENTER MENU ========= */
+  .enter-prompt{
+    top: 345px;
+    left: 90px;
+    cursor:pointer;
+    user-select:none;
+    transition: transform 140ms ease-out, color 140ms ease-out, opacity 140ms ease-out;
+  }
+  .enter-prompt:hover{
+    color:#ffffff;
+    transform:scale(1.08);
+  }
+  body.entered .enter-prompt{
+    opacity:0;
+    pointer-events:none;
+  }
+
+  /* ========= NAV ========= */
+  .nav-home        { top: 250px; left: 140px; }
+  .nav-about       { top: 275px; left: 180px; }
+  .nav-donations   { top: 300px; left: 210px; }
+  .nav-news        { top: 325px; left: 220px; }
+  .nav-install     { top: 350px; left: 220px; }
+  .nav-schedule    { top: 375px; left: 215px; }
+  .nav-register    { top: 400px; left: 190px; }
+  .nav-contact     { top: 425px; left: 145px; }
+
+  .nav-item{
+    cursor:pointer;
+    user-select:none;
+    transform-origin:left center;
+    transition: transform 140ms ease-out, color 140ms ease-out, opacity 160ms ease-out;
+  }
+
+  body:not(.nav-ready) .nav-item{
+    opacity:0;
+    pointer-events:none;
+    transform: translateX(-10px);
+  }
+
+  body.nav-ready .nav-item{
+    opacity:1;
+    pointer-events:auto;
+    transform: translateX(0);
+  }
+
+  .nav-item:hover{
+    color:#ffffff;
+    transform:scale(1.08);
+  }
+
+  /* ========= INFO BUBBLE ========= */
+  .info-bubble{
+    position: fixed;                 /* ✅ fixed to page */
+    left: var(--bubble-left);        /* ✅ pixel control */
+    top: var(--bubble-top);          /* ✅ pixel control */
+
+    width: 325px;
+    min-height: 100px;
+    padding: 14px 16px;
+    border: 1px solid rgba(65,92,125,0.45);
+    background: rgba(255,255,255,0.16);
+    backdrop-filter: blur(3px) saturate(160%);
+    box-shadow: 0 10px 26px rgba(0,0,0,0.18);
+    color: var(--ink);
+
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 180ms ease-out;
+    z-index: 50;                     /* above UI/background */
+  }
+
+  body.info-visible .info-bubble{
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+
+
+  .info-title{
+    font-size:12px;
+    opacity:0.85;
+    margin-bottom:8px;
+  }
+
+  .info-text{
+    font-size:13px;
+    line-height:1.55;
+    letter-spacing:0.05em;
+    white-space:normal;
+  }
+</style>
+</head>
+
+<body>
+
+  <!-- BACKGROUND -->
+  <div class="bg-stage">
+    <div class="bg current" id="bgCurrent"></div>
+    <div class="bg next" id="bgNext"></div>
+  </div>
+
+  <div class="text-layer">
+    <p class="enter-prompt" id="enterPrompt">enter</p>
+
+    <p class="nav-home nav-item" data-key="home">home</p>
+    <p class="nav-about nav-item" data-key="about">about</p>
+    <p class="nav-donations nav-item" data-key="donations">donations</p>
+    <p class="nav-news nav-item" data-key="news">news</p>
+    <p class="nav-install nav-item" data-key="installations">installations</p>
+    <p class="nav-schedule nav-item" data-key="schedule">schedule</p>
+    <p class="nav-register nav-item" data-key="register">register</p>
+    <p class="nav-contact nav-item" data-key="contact">contact</p>
+  </div>
+
+      <div class="info-bubble">
+      <div class="info-title" id="infoTitle"></div>
+      <div class="info-text" id="infoText"></div>
+    </div>
+
+<script>
+  /* ========= MENU CONFIG ========= */
+  const MENU = {
+    home: { bg: "home.png", title: "SYSTEM // HOME", text: "Crane Club folds and donates paper cranes to local hospitals in Michigan." },
+    about: { bg: "about.png", title: "SYSTEM // ABOUT", text: "Each crane is a reminder that someone is thinking of you." },
+    donations: { bg: "donations.png", title: "SYSTEM // DONATIONS", text: "Donations help fund materials and hospital drop-offs." },
+    news: { bg: "news.png", title: "SYSTEM // NEWS", text: "Updates, installations, and community milestones." },
+    installations: { bg: "installations.png", title: "SYSTEM // INSTALLATIONS", text: "Organized crane drops at partnered hospital units." },
+    schedule: { bg: "schedule.png", title: "SYSTEM // SCHEDULE", text: "Folding sessions, packaging nights, and drop-offs." },
+    register: { bg: "register.png", title: "SYSTEM // REGISTER", text: "Volunteer or coordinate a hospital partnership." },
+    contact: { bg: "contact.png", title: "SYSTEM // CONTACT", text: "Reach out to collaborate or learn more." }
+  };
+
+  const bgCurrent = document.getElementById("bgCurrent");
+  const bgNext = document.getElementById("bgNext");
+  const infoTitle = document.getElementById("infoTitle");
+  const infoText = document.getElementById("infoText");
+  const enterPrompt = document.getElementById("enterPrompt");
+
+  let entered = false;
+  let currentKey = null;
+  let transitioning = false;
+
+  bgCurrent.style.backgroundImage = 'url("background.png")';
+
+  const CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789#$%&*+-=?";
+
+  function scramble(el, text){
+    let i = 0;
+    const interval = setInterval(() => {
+      el.textContent = text
+        .split("")
+        .map((c, idx) => idx < i ? c : CHARS[Math.floor(Math.random()*CHARS.length)])
+        .join("");
+      if(i++ >= text.length){
+        clearInterval(interval);
+        el.textContent = text;
+      }
+    }, 20);
+  }
+
+  function enterSite(){
+    if(entered) return;
+    entered = true;
+
+    bgNext.style.backgroundImage = 'url("enter.png")';
+    document.body.classList.add("bg-transition");
+
+    setTimeout(() => {
+      bgCurrent.style.backgroundImage = 'url("enter.png")';
+      bgNext.style.backgroundImage = "";          // ✅
+      document.body.classList.remove("bg-transition");
+      document.body.classList.add("entered","nav-ready");
+    }, 280);
+
+  }
+
+    function navigate(key){
+      if(!entered || transitioning || !MENU[key]) return;
+      transitioning = true;
+
+      /* ✅ reveal info bubble ONLY on nav click */
+      document.body.classList.add("info-visible");
+
+      bgNext.style.backgroundImage = `url("${MENU[key].bg}")`;
+      document.body.classList.add("bg-transition");
+
+      infoTitle.textContent = MENU[key].title;
+      scramble(infoText, MENU[key].text);
+
+      setTimeout(() => {
+        bgCurrent.style.backgroundImage = `url("${MENU[key].bg}")`;
+        document.body.classList.remove("bg-transition");
+        transitioning = false;
+      }, 400);
+    }
+
+
+  enterPrompt.addEventListener("click", enterSite);
+  window.addEventListener("keydown", e => e.key === "Enter" && enterSite());
+
+  document.querySelectorAll(".nav-item").forEach(el => {
+    el.addEventListener("click", () => navigate(el.dataset.key));
+  });
+</script>
+
+</body>
+</html>
